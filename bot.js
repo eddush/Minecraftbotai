@@ -10,12 +10,14 @@ const MS_EMAIL = process.env.MC_MICROSOFT_EMAIL || '';
 const AUTHME_PASSWORD = process.env.AUTHME_PASSWORD || '';
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 const GROQ_KEY = process.env.GROQ_API_KEY;
+const BOT_ENABLED = String(process.env.BOT_ENABLED || 'true').toLowerCase() !== 'false';
 
 if (!GROQ_KEY) console.warn('WARNING: GROQ_API_KEY is not set. The bot can connect, but AI commands will not work.');
 if (!AUTHME_PASSWORD && !MS_EMAIL) console.warn('WARNING: AUTHME_PASSWORD is not set. AuthMe registration/login will be skipped.');
+if (!BOT_ENABLED) console.log('Minecraft bot is disabled (BOT_ENABLED=false).');
 
 const app = express();
-app.get('/', (_req, res) => res.json({ ok: true, minecraft: `${HOST}:${PORT}`, bot: bot?.username || null, connected: !!bot?.entity }));
+app.get('/', (_req, res) => res.json({ ok: true, minecraft: `${HOST}:${PORT}`, bot: bot?.username || null, connected: !!bot?.entity, enabled: BOT_ENABLED }));
 app.get('/health', (_req, res) => res.send('ok'));
 app.listen(Number(process.env.PORT || 10000), '0.0.0.0', () => console.log('HTTP health server started'));
 
@@ -40,6 +42,12 @@ function setupAuthMe() {
 }
 
 function connect() {
+  if (!BOT_ENABLED) return;
+  if (bot && (bot.entity || bot._client?.socket || bot._client)) {
+    console.log('Bot connection already exists; skipping duplicate connection.');
+    return;
+  }
+
   const options = {
     host: HOST,
     port: PORT,
@@ -57,7 +65,7 @@ function connect() {
     const mcData = require('minecraft-data')(bot.version);
     const movements = new Movements(bot, mcData);
     bot.pathfinder.setMovements(movements);
-    setTimeout(() => bot.chat('AI bot online. Use !ai <request>'), 7000);
+    setTimeout(() => bot?.entity && bot.chat('AI bot online. Use !ai <request>'), 7000);
   });
 
   bot.on('chat', async (username, message) => {
@@ -73,8 +81,9 @@ function connect() {
   bot.on('kicked', reason => console.log('Kicked:', reason));
   bot.on('error', err => console.error('Minecraft error:', err.message));
   bot.on('end', () => {
-    console.log('Disconnected; reconnecting in 10 seconds...');
-    setTimeout(connect, 10000);
+    console.log(BOT_ENABLED ? 'Disconnected; reconnecting in 10 seconds...' : 'Disconnected; bot is disabled.');
+    bot = null;
+    if (BOT_ENABLED) setTimeout(() => { if (!bot) connect(); }, 10000);
   });
 }
 
@@ -162,4 +171,4 @@ async function handleRequest(request, username) {
   } finally { busy = false; }
 }
 
-connect();
+if (BOT_ENABLED) connect();
