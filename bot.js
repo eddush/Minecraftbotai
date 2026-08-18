@@ -7,10 +7,12 @@ const PORT = Number(process.env.MC_PORT || 25565);
 const VERSION = process.env.MC_VERSION && process.env.MC_VERSION !== 'auto' ? process.env.MC_VERSION : false;
 const USERNAME = process.env.MC_USERNAME || 'EddyAI';
 const MS_EMAIL = process.env.MC_MICROSOFT_EMAIL || '';
+const AUTHME_PASSWORD = process.env.AUTHME_PASSWORD || '';
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 const GROQ_KEY = process.env.GROQ_API_KEY;
 
 if (!GROQ_KEY) console.warn('WARNING: GROQ_API_KEY is not set. The bot can connect, but AI commands will not work.');
+if (!AUTHME_PASSWORD && !MS_EMAIL) console.warn('WARNING: AUTHME_PASSWORD is not set. AuthMe registration/login will be skipped.');
 
 const app = express();
 app.get('/', (_req, res) => res.json({ ok: true, minecraft: `${HOST}:${PORT}`, bot: bot?.username || null, connected: !!bot?.entity }));
@@ -20,6 +22,22 @@ app.listen(Number(process.env.PORT || 10000), '0.0.0.0', () => console.log('HTTP
 let bot;
 let lastChat = [];
 let busy = false;
+
+function setupAuthMe() {
+  if (!AUTHME_PASSWORD || MS_EMAIL) return;
+
+  setTimeout(() => {
+    if (!bot?.entity) return;
+    console.log('AuthMe: sending /register');
+    bot.chat(`/register ${AUTHME_PASSWORD} ${AUTHME_PASSWORD}`);
+  }, 2500);
+
+  setTimeout(() => {
+    if (!bot?.entity) return;
+    console.log('AuthMe: sending /login');
+    bot.chat(`/login ${AUTHME_PASSWORD}`);
+  }, 5000);
+}
 
 function connect() {
   const options = {
@@ -35,10 +53,11 @@ function connect() {
 
   bot.once('spawn', () => {
     console.log(`Logged in as ${bot.username} on ${HOST}:${PORT}`);
+    setupAuthMe();
     const mcData = require('minecraft-data')(bot.version);
     const movements = new Movements(bot, mcData);
     bot.pathfinder.setMovements(movements);
-    bot.chat('AI bot online. Use !ai <request>');
+    setTimeout(() => bot.chat('AI bot online. Use !ai <request>'), 7000);
   });
 
   bot.on('chat', async (username, message) => {
@@ -50,6 +69,7 @@ function connect() {
     }
   });
 
+  bot.on('messagestr', message => console.log('Server:', message));
   bot.on('kicked', reason => console.log('Kicked:', reason));
   bot.on('error', err => console.error('Minecraft error:', err.message));
   bot.on('end', () => {
