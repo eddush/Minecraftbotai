@@ -5,7 +5,7 @@ const express = require('express');
 const HOST = process.env.MC_HOST || 'eddydev.ddns.net';
 const PORT = Number(process.env.MC_PORT || 25565);
 const VERSION = process.env.MC_VERSION && process.env.MC_VERSION !== 'auto' ? process.env.MC_VERSION : false;
-const USERNAME = process.env.MC_USERNAME || 'EddyAI';
+const USERNAME = process.env.MC_USERNAME || 'EddyBotAI';
 const MS_EMAIL = process.env.MC_MICROSOFT_EMAIL || '';
 const AUTHME_PASSWORD = process.env.AUTHME_PASSWORD || '';
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
