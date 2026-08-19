@@ -26,5 +26,13 @@ s = s.replace(/server\.on\('upgrade', \(req, socket, head\) => \{\n  if \(req\.u
   }
 });`);
 
+// The dashboard is embedded in a JavaScript template literal. A plain \\n
+// inside that template can become a real newline inside a quoted JS string,
+// which breaks the dashboard script and leaves every field stuck on Loading.
+s = s.replace(/box\.textContent=l\.logs\.map\(x=>\('\['\+new Date\(x\.time\)\.toLocaleTimeString\(\)\+'\] '\+x\.message\)\.join\('[\s\S]*?'\);/, "box.textContent=l.logs.map(x=>'['+new Date(x.time).toLocaleTimeString()+'] '+x.message).join('\\\\n');");
+
+// Make the frontend always replace Loading with a visible API error.
+s = s.replace("}catch(e){document.getElementById('top').innerHTML='<span class=\"err\">'+esc(e.message)+'</span>'}", "}catch(e){document.getElementById('top').innerHTML='<span class=\"err\">API error: '+esc(e.message)+'</span>';document.getElementById('status').textContent='API error: '+e.message;document.getElementById('logs').textContent='API error: '+e.message}");
+
 fs.writeFileSync(file, s);
 console.log('Dashboard runtime fixes applied');
