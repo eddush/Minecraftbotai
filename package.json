@@ -4,7 +4,7 @@
   "private": true,
   "description": "Minecraft AI agent using Mineflayer, Groq and a web dashboard",
   "main": "bot.js",
-  "scripts": { "start": "node bot.js" },
+  "scripts": { "start": "node fix-dashboard.js && node bot.js" },
   "engines": { "node": ">=18" },
   "dependencies": {
     "express": "^5.1.0",
