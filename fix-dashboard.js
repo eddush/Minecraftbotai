@@ -8,11 +8,11 @@ if (!/^const fs = require\('fs'\);/m.test(s)) {
   s = "const fs = require('fs');\nconst path = require('path');\n\n" + s;
 }
 
-// Public dashboard: disable token checks.
+// Public dashboard: no token required.
 s = s.replace(/const DASHBOARD_TOKEN = process\.env\.DASHBOARD_TOKEN \|\| '';\s*/, "const DASHBOARD_TOKEN = '';\n");
 s = s.replace(/function authorized\(req\) \{[\s\S]*?\n\}\n\nfunction auth\(req, res, next\) \{[\s\S]*?\n\}/, "function authorized(req) { return true; }\nfunction auth(req, res, next) { return next(); }");
 
-// Use the standalone dashboard file.
+// Replace the old embedded dashboard with dashboard.html.
 const dashboardDecl = "const DASHBOARD_HTML = fs.readFileSync(path.join(__dirname, 'dashboard.html'), 'utf8');";
 const start = s.indexOf('const DASHBOARD_HTML = ');
 const endMarker = '\n\nif (BOT_ENABLED) connect();';
@@ -21,7 +21,10 @@ if (start !== -1 && end !== -1) {
   s = s.slice(0, start) + dashboardDecl + s.slice(end);
 }
 
-// dashboard.html requires /api/ping. Insert it by the stable status-route marker.
+// Make /dashboard always serve the standalone file and prevent caching.
+s = s.replace(/app\.get\('\/dashboard', auth, \(_req, res\) => res\.type\('html'\)\.send\(DASHBOARD_HTML\)\);/, "app.get('/dashboard', auth, (_req, res) => { res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate'); res.set('Pragma', 'no-cache'); res.set('Expires', '0'); res.type('html').send(DASHBOARD_HTML); });");
+
+// Ensure the API ping route exists.
 if (!s.includes("app.get('/api/ping'")) {
   const marker = "app.get('/api/status', auth, (_req, res) => {";
   const i = s.indexOf(marker);
@@ -33,12 +36,12 @@ if (!s.includes("app.get('/api/ping'")) {
   s = s.slice(0, i) + ping + s.slice(i);
 }
 
-// Disable browser/proxy caching for API responses.
+// Disable caching for API data.
 s = s.replace("app.get('/api/status', auth, (_req, res) => {", "app.get('/api/status', auth, (_req, res) => {\n  res.set('Cache-Control', 'no-store');");
 s = s.replace("app.get('/api/logs', auth, (_req, res) => res.json({ ok: true, logs }));", "app.get('/api/logs', auth, (_req, res) => { res.set('Cache-Control', 'no-store'); res.json({ ok: true, logs }); });");
 s = s.replace("app.get('/api/chat', auth, (_req, res) => res.json({ ok: true, chat }));", "app.get('/api/chat', auth, (_req, res) => { res.set('Cache-Control', 'no-store'); res.json({ ok: true, chat }); });");
 
-// Correct Viewer proxy paths for HTTP and WebSocket.
+// Fix Viewer proxy paths for HTTP and WebSocket.
 s = s.replace(/app\.use\(\(req, res, next\) => \{[\s\S]*?\n\}\);\n\nconst server = http\.createServer/, `app.use((req, res, next) => {
   if (req.url === '/viewer' || req.url.startsWith('/viewer/')) {
     req.url = req.url.replace(/^\\/viewer/, '') || '/';
@@ -58,4 +61,4 @@ s = s.replace(/server\.on\('upgrade', \(req, socket, head\) => \{[\s\S]*?\n\}\);
 });`);
 
 fs.writeFileSync(file, s);
-console.log('Dashboard/API runtime fix applied: /api/ping ensured');
+console.log('Dashboard fixed: standalone HTML + no-cache + public API');
