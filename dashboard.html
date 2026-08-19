@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-store">
 <title>EddyBotAI Dashboard</title>
 <style>
 body{margin:0;background:#090e1b;color:#eef;font:14px Arial,sans-serif}header{padding:14px;background:#111a2d;display:flex;justify-content:space-between}main{display:grid;grid-template-columns:2fr 1fr;gap:14px;padding:14px}.card{background:#111a2d;border:1px solid #26365d;border-radius:12px;padding:12px;margin-bottom:14px}.viewer{width:100%;height:540px;border:0;background:#000;border-radius:8px}.console{height:260px;overflow:auto;background:#050811;padding:10px;white-space:pre-wrap;font:12px monospace;border-radius:8px}.row{display:flex;gap:8px}.row>*{flex:1}input,textarea{box-sizing:border-box;width:100%;background:#080d18;color:white;border:1px solid #34466f;border-radius:8px;padding:10px}button{background:#705cff;color:#fff;border:0;border-radius:8px;padding:10px;font-weight:bold;cursor:pointer}.chat{max-height:180px;overflow:auto}.msg{padding:5px;border-bottom:1px solid #26365d}.err{color:#ff8d8d}.ok{color:#69f0a1}@media(max-width:850px){main{grid-template-columns:1fr}.viewer{height:420px}}
@@ -26,17 +27,26 @@ body{margin:0;background:#090e1b;color:#eef;font:14px Arial,sans-serif}header{pa
 'use strict';
 const $=id=>document.getElementById(id);
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-async function api(path,options){
-  const opts=options||{};
-  opts.headers=Object.assign({'Content-Type':'application/json'},opts.headers||{});
-  const r=await fetch(path,opts);
-  const text=await r.text();
-  let data; try{data=JSON.parse(text)}catch(e){throw new Error('HTTP '+r.status+': '+text.slice(0,200));}
-  if(!r.ok)throw new Error(data.error||('HTTP '+r.status));
-  return data;
+async function api(url,options={}){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),5000);
+  try{
+    const opts={...options,cache:'no-store',signal:controller.signal};
+    opts.headers=Object.assign({'Accept':'application/json','Content-Type':'application/json'},opts.headers||{});
+    const r=await fetch(url,opts);
+    const text=await r.text();
+    let data;try{data=JSON.parse(text)}catch(e){throw new Error('HTTP '+r.status+': '+text.slice(0,200));}
+    if(!r.ok)throw new Error(data.error||('HTTP '+r.status));
+    return data;
+  }catch(e){
+    if(e.name==='AbortError')throw new Error('API timeout - server did not respond within 5 seconds');
+    throw e;
+  }finally{clearTimeout(timer);}
 }
 async function refresh(){
   try{
+    const p=await api('/api/ping');
+    if(!p.ok)throw new Error('API ping failed');
     const s=await api('/api/status');
     $('top').innerHTML=s.connected?'<span class="ok">🟢 Online</span>':'<span class="err">🔴 Offline</span>';
     $('status').innerHTML='<b>'+esc(s.bot)+'</b><br>Version: '+esc(s.version)+'<br>Server: '+esc(s.server)+'<br>Position: '+(s.position?esc(s.position.x+', '+s.position.y+', '+s.position.z):'—')+'<br>Task: '+(s.busy?'Running':'Idle');
@@ -46,9 +56,10 @@ async function refresh(){
     const c=await api('/api/chat');
     $('chat').innerHTML=(c.chat||[]).map(x=>'<div class="msg"><b>'+esc(x.username)+'</b>: '+esc(x.message)+'</div>').join('')||'No chat yet';
   }catch(e){
-    $('top').innerHTML='<span class="err">⚠ '+esc(e.message)+'</span>';
-    $('status').innerHTML='<span class="err">API error: '+esc(e.message)+'</span>';
-    $('logs').textContent='API error: '+e.message;
+    const msg=e.message||String(e);
+    $('top').innerHTML='<span class="err">⚠ '+esc(msg)+'</span>';
+    $('status').innerHTML='<span class="err">API error: '+esc(msg)+'</span>';
+    $('logs').textContent='API error: '+msg;
   }
 }
 $('send').onclick=async function(){
