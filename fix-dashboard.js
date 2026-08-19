@@ -5,12 +5,16 @@ const root = __dirname;
 const file = path.join(root, 'bot.js');
 let s = fs.readFileSync(file, 'utf8');
 
+// bot.js now reads dashboard.html at startup, so it must have fs/path available.
+if (!/^const fs = require\('fs'\);/m.test(s)) {
+  s = "const fs = require('fs');\nconst path = require('path');\n\n" + s;
+}
+
 // Make the dashboard public: no token is required.
 s = s.replace(/const DASHBOARD_TOKEN = process\.env\.DASHBOARD_TOKEN \|\| '';\s*/, "const DASHBOARD_TOKEN = '';\n");
 s = s.replace(/function authorized\(req\) \{[\s\S]*?\n\}\n\nfunction auth\(req, res, next\) \{[\s\S]*?\n\}/, "function authorized(req) { return true; }\nfunction auth(req, res, next) { return next(); }");
 
 // Replace the fragile inline template-literal dashboard with a standalone HTML file.
-// This avoids escaping/newline issues that previously prevented the browser JS from running.
 const start = s.indexOf('const DASHBOARD_HTML = `');
 const endMarker = '\n\nif (BOT_ENABLED) connect();';
 const end = s.indexOf(endMarker, start);
